@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>IMPACT — O Algoritmo da Execução</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Share+Tech+Mono&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+
+    :root {
+      --gold:        #D4A017;
+      --gold-bright: #F5C518;
+      --dark:        #0A0A0A;
+      --card:        #111111;
+      --grid-line:   rgba(212,160,23,0.08);
+      --dim:         #888888;
+      --pad:         1.1rem;
+    }
+
+    body {
+      background: var(--dark);
+      color: #E8E8E8;
+      font-family: 'DM Sans', sans-serif;
+      overflow-x: hidden;
+      background-image:
+        linear-gradient(var(--grid-line) 1px, transparent 1px),
+        linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+      background-size: 36px 36px;
+    }
+
+    /* NAV */
+    nav {
+      position: fixed;
+      inset: 0 0 auto 0;
+      z-index: 200;
+      height: 52px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 var(--pad);
+      background: rgba(10,10,10,0.96);
+      backdrop-filter: blur(14px);
+      border-bottom: 1px solid rgba(212,160,23,0.18);
+    }
+    .nav-logo {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 1.45rem;
+      letter-spacing: .16em;
+      color: var(--gold-bright);
+    }
+    .nav-links { display: none; gap: 1.5rem; }
+    .nav-links a {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: .7rem;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      color: var(--dim);
+      text-decoration: none;
+      transition: color .2s;
+    }
+    .nav-links a:hover { color: var(--gold-bright); }
+
+    .hamburger {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      cursor: pointer;
+      padding: 6px;
+      background: none;
+      border: none;
+    }
+    .hamburger span {
+      display: block;
+      width: 22px; height: 2px;
+      background: var(--gold);
+      border-radius: 2px;
+    }
+
+    .mobile-menu {
+      display: none;
+      position: fixed;
+      top: 52px; left: 0; right: 0;
+      z-index: 199;
+      background: rgba(10,10,10,0.98);
+      border-bottom: 1px solid rgba(212,160,23,0.18);
+      padding: 1.25rem var(--pad);
+      flex-direction: column;
+      gap: 0;
+    }
+    .mobile-menu.open { display: flex; }
+    .mobile-menu a {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: .85rem;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      color: var(--dim);
+      text-decoration: none;
+      padding: .85rem 0;
+      border-bottom: 1px solid rgba(212,160,23,0.1);
+    }
+    .mobile-menu a:last-child { border-bottom: none; }
+
+    @media (min-width: 640px) {
+      :root { --pad: 2rem; }
+      .hamburger { display: none; }
+      .nav-links  { display: flex; }
+      .mobile-menu { display: none !important; }
+    }
+
+    /* HELPERS */
+    .wrap { padding: 3.5rem var(--pad); max-width: 1200px; margin: 0 auto; }
+
+    .slabel {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: .66rem;
+      letter-spacing: .22em;
+      color: var(--gold);
+      text-transform: uppercase;
+      margin-bottom: .55rem;
+      display: flex;
+      align-items: center;
+      gap: .55rem;
+    }
+    .slabel::before { content:''; display:block; width:18px; height:1px; background:var(--gold); flex-shrink:0; }
+
+    .stitle {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: clamp(2.2rem, 9vw, 4.5rem);
+      letter-spacing: .05em;
+      line-height: 1;
+      color: #E8E8E8;
+    }
+    .stitle span { color: var(--gold-bright); }
+
+    .sdesc { color: var(--dim); line-height: 1.8; margin-top: .7rem; font-size: .91rem; }
+
+    hr.div { border: none; border-top: 1px solid rgba(212,160,23,0.12); }
+
+    /* FADE IN */
+    .fi { opacity:0; transform:translateY(18px); transition: opacity .55s ease, transform .55s ease; }
+    .fi.on { opacity:1; transform:none; }
+
+    /* HERO */
+    .hero {
+      min-height: 100svh;
+      display: flex;
+      align-items: center;
+      padding: 80px var(--pad) 3rem;
+      position: relative;
+      overflow: hidden;
+    }
+    .hero-glow {
+      position: absolute; inset: 0;
+      background: radial-gradient(ellipse 60% 50% at 50% 50%, rgba(212,160,23,.1), transparent 70%);
+      pointer-events: none;
+    }
+    .hero-inner { position: relative; z-index: 1; width: 100%; }
+
+    .hero-badge {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: .63rem;
+      letter-spacing: .18em;
+      color: var(--gold);
+      border: 1px solid rgba(212,160,23,.4);
+      padding: 3px 10px;
+      display: inline-block;
+      margin-bottom: 1.1rem;
+      animation: up .6s ease both;
+    }
+    h1.htitle {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: clamp(5.5rem, 26vw, 13rem);
+      line-height: .88;
+      color: var(--gold-bright);
+      letter-spacing: .04em;
+      text-shadow: 0 0 80px rgba(212,160,23,.25);
+      animation: up .6s .08s ease both;
+    }
+    .hsub {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: clamp(1rem, 5vw, 2rem);
+      letter-spacing: .08em;
+      color: #E8E8E8;
+      margin-top: .35rem;
+      animation: up .6s .15s ease both;
+    }
+    .hsys {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: clamp(.72rem, 3.2vw, 1rem);
+      letter-spacing: .12em;
+      color: rgba(212,160,23,.65);
+      margin-top: .25rem;
+      animation: up .6s .2s ease both;
+    }
+    .hbody {
+      font-size: clamp(.82rem, 3.5vw, .97rem);
+      color: var(--dim);
+      line-height: 1.75;
+      margin-top: 1.1rem;
+      max-width: 440px;
+      animation: up .6s .27s ease both;
+    }
+
+    /* BUTTONS */
+    .btn-p {
+      display: inline-block;
+      padding: 13px 30px;
+      background: var(--gold-bright);
+      color: #0A0A0A;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: .8rem;
+      letter-spacing: .16em;
+      text-transform: uppercase;
+      text-decoration: none;
+      font-weight: 700;
+      transition: all .22s;
+    }
+    .btn-p:hover { background:#fff; box-shadow:0 0 28px rgba(245,197,24,.4); transform:translateY(-2px); }
+    .btn-o {
+      display: inline-block;
+      padding: 13px 30px;
+      border: 1px solid rgba(212,160,23,.4);
+      color: var(--gold);
+      font-family: 'Share Tech Mono', monospace;
+      font-size: .8rem;
+      letter-spacing: .16em;
+      text-decoration: none;
+      transition: all .22s;
+    }
+    .btn-o:hover { border-color:var(--gold); background:rgba(212,160,23,.08); }
+
+    /* hero counters */
+    .hcounts {
+      display: flex;
+      gap: 1.4rem;
+      margin-top: 2.8rem;
+      flex-wrap: wrap;
+      animation: up .6s .42s ease both;
+    }
+    .hcdiv { width:1px; background:rgba(212,160,23,.2); align-self:stretch; }
+    .hcn { font-family:'Bebas Neue',sans-serif; font-size:2rem; color:var(--gold-bright); line-height:1; }
+    .hcl { font-family:'Share Tech Mono',monospace; font-size:.58rem; color:var(--dim); letter-spacing:.1em; margin-top:1px; }
+
+    /* STATS BAND */
+    .sband { padding: 2.5rem var(--pad); max-width:1200px; margin:0 auto; }
+    .sgrid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1px;
+      background: rgba(212,160,23,.1);
+    }
+    @media (min-width: 600px) { .sgrid { grid-template-columns: repeat(4,1fr); } }
+    .scard { background:var(--dark); padding:1.1rem .9rem; text-align:center; transition:background .3s; }
+    .scard:hover { background:rgba(212,160,23,.05); }
+    .scn { font-family:'Bebas Neue',sans-serif; font-size:clamp(1.8rem,6vw,2.8rem); color:var(--gold-bright); line-height:1; display:block; }
+    .scl { font-family:'Share Tech Mono',monospace; font-size:.58rem; letter-spacing:.09em; color:var(--dim); margin-top:.3rem; text-transform:uppercase; line-height:1.4; }
+
+    /* CARD GRID */
+    .cgrid { display:grid; grid-template-columns:1fr; gap:.9rem; margin-top:2rem; }
+    @media (min-width: 768px) {
+      .cgrid-2 { grid-template-columns:1fr 1fr; }
+      .cgrid-2t .tall { grid-row:span 2; }
+    }
+    .ccard {
+      background: var(--card);
+      border: 1px solid rgba(212,160,23,.14);
+      padding: 1.35rem;
+      position: relative;
+      overflow: hidden;
+      transition: border-color .3s, transform .3s;
+    }
+    .ccard:hover { border-color:rgba(212,160,23,.45); transform:translateY(-3px); }
+    .ccard::before {
+      content:''; position:absolute; top:0; left:0; right:0; height:2px;
+      background:linear-gradient(90deg,var(--gold-bright),transparent);
+      opacity:0; transition:opacity .3s;
+    }
+    .ccard:hover::before { opacity:1; }
+    .cnum {
+      font-family:'Bebas Neue',sans-serif; font-size:4rem; line-height:1;
+      color:rgba(212,160,23,.07); position:absolute; top:.6rem; right:1rem;
+      letter-spacing:.05em; pointer-events:none;
+    }
+    .ctag {
+      font-family:'Share Tech Mono',monospace; font-size:.6rem; letter-spacing:.17em;
+      color:var(--gold); border:1px solid rgba(212,160,23,.3); padding:3px 8px;
+      display:inline-block; margin-bottom:.8rem;
+    }
+    .ctitle {
+      font-family:'Bebas Neue',sans-serif; font-size:clamp(1.35rem,5vw,1.75rem);
+      letter-spacing:.06em; color:#E8E8E8; line-height:1.1; margin-bottom:.8rem;
+    }
+    .cbody { color:var(--dim); font-size:.87rem; line-height:1.75; }
+
+    /* key points */
+    .kp { display:flex; align-items:flex-start; gap:.6rem; padding:.6rem 0; border-bottom:1px solid rgba(255,255,255,.05); }
+    .kp:last-child { border-bottom:none; }
+    .kpdot { width:6px; height:6px; background:var(--gold-bright); border-radius:50%; flex-shrink:0; margin-top:7px; }
+    .kpt { font-size:.84rem; color:#C0C0C0; line-height:1.6; }
+    .kpt strong { color:#E8E8E8; font-weight:500; }
+
+    /* quote */
+    .qt { border-left:3px solid var(--gold); padding:.85rem 1.1rem; background:rgba(212,160,23,.04); margin-top:1.1rem; }
+    .qtt { font-style:italic; color:#C0C0C0; font-size:.85rem; line-height:1.7; }
+    .qta { font-family:'Share Tech Mono',monospace; font-size:.62rem; color:var(--gold); margin-top:.35rem; letter-spacing:.09em; }
+
+    /* era badges */
+    .erow { display:flex; gap:.7rem; align-items:flex-start; margin-bottom:.6rem; }
+    .eb { padding:4px 9px; font-family:'Bebas Neue',sans-serif; font-size:.9rem; letter-spacing:.1em; flex-shrink:0; }
+    .eb.off { background:rgba(212,160,23,.12); border:1px solid rgba(212,160,23,.3); color:var(--gold-bright); }
+    .eb.on  { background:rgba(212,160,23,.5);  border:1px solid var(--gold); color:#0A0A0A; }
+
+    /* formula */
+    .formula { padding:.9rem 1.1rem; background:rgba(212,160,23,.06); border-left:2px solid var(--gold); margin-top:.9rem; }
+
+    /* step list */
+    .step { display:flex; align-items:flex-start; gap:.65rem; padding:.45rem 0; }
+    .stepn {
+      width:20px; height:20px; background:rgba(212,160,23,.14); border:1px solid var(--gold);
+      display:flex; align-items:center; justify-content:center;
+      font-family:'Share Tech Mono',monospace; font-size:.56rem; color:var(--gold); flex-shrink:0;
+    }
+
+    /* mini stat */
+    .mstg { display:grid; grid-template-columns:1fr 1fr; gap:.6rem; margin-top:1.1rem; }
+    .mst { background:rgba(212,160,23,.06); border:1px solid rgba(212,160,23,.2); padding:.8rem; text-align:center; }
+    .mst.danger { background:rgba(255,50,50,.05); border-color:rgba(255,50,50,.2); grid-column:span 2; }
+    .mstn { font-family:'Bebas Neue',sans-serif; font-size:2rem; line-height:1; }
+    .mstl { font-family:'Share Tech Mono',monospace; font-size:.57rem; letter-spacing:.09em; color:var(--dim); margin-top:2px; }
+
+    /* CTA */
+    .cta {
+      padding: 4.5rem var(--pad);
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .cta::before {
+      content:'IMPACT'; font-family:'Bebas Neue',sans-serif;
+      font-size:clamp(5rem,35vw,20rem); color:rgba(212,160,23,.03);
+      position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+      letter-spacing:.1em; pointer-events:none; white-space:nowrap;
+    }
+    .ctatitle {
+      font-family:'Bebas Neue',sans-serif; font-size:clamp(2rem,8vw,4.5rem);
+      letter-spacing:.05em; color:#E8E8E8; line-height:1.1; position:relative; z-index:1;
+    }
+    .ctabtns {
+      display:flex; gap:.9rem; justify-content:center; flex-wrap:wrap;
+      margin-top:1.8rem; position:relative; z-index:1;
+    }
+    @media (max-width: 380px) {
+      .ctabtns { flex-direction:column; align-items:center; }
+      .ctabtns a { width:100%; max-width:280px; text-align:center; }
+    }
+    .author-badge {
+      display:inline-flex; align-items:center; gap:.9rem;
+      background:var(--card); border:1px solid rgba(212,160,23,.2);
+      padding:.9rem 1.1rem; margin-top:2.2rem;
+      position:relative; z-index:1; max-width:calc(100% - 2rem); text-align:left;
+    }
+    .av {
+      width:42px; height:42px; border-radius:50%;
+      background:linear-gradient(135deg,var(--gold),#8B6914);
+      display:flex; align-items:center; justify-content:center;
+      font-family:'Bebas Neue',sans-serif; font-size:1.15rem; color:#0A0A0A; flex-shrink:0;
+    }
+    .aname { font-family:'Bebas Neue',sans-serif; font-size:.95rem; letter-spacing:.08em; color:#E8E8E8; }
+    .arole { font-family:'Share Tech Mono',monospace; font-size:.58rem; letter-spacing:.08em; color:var(--dim); margin-top:2px; line-height:1.5; }
+
+    /* FOOTER */
+    footer {
+      border-top:1px solid rgba(212,160,23,.13);
+      padding:1.8rem var(--pad);
+      display:flex; flex-direction:column; gap:.7rem;
+      align-items:center; text-align:center;
+    }
+    @media (min-width: 768px) { footer { flex-direction:row; justify-content:space-between; text-align:left; } }
+    .flogo { font-family:'Bebas Neue',sans-serif; font-size:1.2rem; color:var(--gold); letter-spacing:.15em; }
+    .ft    { font-family:'Share Tech Mono',monospace; font-size:.6rem; color:var(--dim); letter-spacing:.09em; line-height:1.5; }
+
+    @keyframes up {
+      from { opacity:0; transform:translateY(20px); }
+      to   { opacity:1; transform:none; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- NAV -->
+  <nav>
+    <div class="nav-logo">IMPACT</div>
+    <div class="nav-links">
+      <a href="#about">Sobre</a>
+      <a href="#cap1">Cap. 01</a>
+      <a href="#cap2">Cap. 02</a>
+      <a href="#adquira">Adquirir</a>
+    </div>
+    <button class="hamburger" id="hbtn" aria-label="Menu">
+      <span></span><span></span><span></span>
+    </button>
+  </nav>
+
+  <!-- MOBILE DRAWER -->
+  <div class="mobile-menu" id="mmenu">
+    <a href="#about"   onclick="closeMenu()">Sobre</a>
+    <a href="#cap1"    onclick="closeMenu()">Capítulo 01</a>
+    <a href="#cap2"    onclick="closeMenu()">Capítulo 02</a>
+    <a href="#adquira" onclick="closeMenu()">Adquirir</a>
+  </div>
+
+  <!-- HERO -->
+  <section class="hero" id="about">
+    <div class="hero-glow"></div>
+    <div class="hero-inner">
+      <div class="hero-badge">DOC. NO. 204-5B // V.1.0 // CLASSIFIED</div>
+      <h1 class="htitle">IMPACT</h1>
+      <p class="hsub">O Algoritmo da Execução</p>
+      <p class="hsys">Sistema à prova de falhas para quem lida com o Caos Real</p>
+      <p class="hbody">
+        Não é um guia de arrumação. É um manifesto sobre a decisão —
+        um algoritmo cru e funcional, desenhado para o combate diário,
+        operando à margem do seu humor ou de picos de motivação.
+      </p>
+      <a href="#adquira" class="btn-p" style="margin-top:1.8rem; animation: up .6s .34s ease both;">Adquirir o livro →</a>
+      <div class="hcounts">
+        <div><div class="hcn">13</div><div class="hcl">Capítulos</div></div>
+        <div class="hcdiv"></div>
+        <div><div class="hcn">120</div><div class="hcl">Páginas</div></div>
+        <div class="hcdiv"></div>
+        <div><div class="hcn">1</div><div class="hcl">Sistema completo</div></div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="div">
+
+  <!-- STATS BAND -->
+  <div class="sband">
+    <div class="sgrid">
+      <div class="scard fi"><span class="scn">34<span style="font-size:60%;color:var(--gold);">GB</span></span><p class="scl">informação processada<br>por dia</p></div>
+      <div class="scard fi" style="transition-delay:.08s"><span class="scn">4</span><p class="scl">limite real da<br>memória de trabalho</p></div>
+      <div class="scard fi" style="transition-delay:.16s"><span class="scn">174</span><p class="scl">jornais diários<br>a processar</p></div>
+      <div class="scard fi" style="transition-delay:.24s"><span class="scn">0</span><p class="scl">força de vontade<br>necessária</p></div>
+    </div>
+  </div>
+
+  <hr class="div" style="margin-top:2.5rem;">
+
+  <!-- CHAPTER 1 -->
+  <section id="cap1">
+    <div class="wrap">
+      <div class="slabel fi">Capítulo 01</div>
+      <h2 class="stitle fi">O ATAQUE DE <span>NEGAÇÃO</span><br>DE SERVIÇO (DDoS)</h2>
+      <p class="sdesc fi">Como o bombardeio constante de estímulos paralisa o sistema cognitivo — e por que isso não é falha de caráter, mas problema de arquitetura.</p>
+
+      <div class="cgrid cgrid-2 cgrid-2t">
+
+        <!-- tall card -->
+        <div class="ccard tall fi">
+          <span class="cnum">01</span>
+          <span class="ctag">DIAGNÓSTICO DO SISTEMA</span>
+          <h3 class="ctitle">A Matemática do Colapso</h3>
+          <p class="cbody">O problema não é falta de disciplina. É dimensionamento de carga: hardware biológico sem atualização há 50 mil anos tentando processar o fluxo informacional do século XXI.</p>
+          <div style="margin-top:1.2rem;">
+            <div class="kp"><div class="kpdot"></div><p class="kpt"><strong>O efeito DDoS mental:</strong> Milhares de requisições simultâneas fazem o cérebro perder a capacidade de distinguir incêndio real de ruído — tudo vira urgência.</p></div>
+            <div class="kp"><div class="kpdot"></div><p class="kpt"><strong>Latência cognitiva:</strong> Terminar o dia exausto sem projetos relevantes entregues é sintoma de overflow — não de preguiça.</p></div>
+            <div class="kp"><div class="kpdot"></div><p class="kpt"><strong>O Paradoxo da Conexão:</strong> Checamos o e-mail no sábado não por vício, mas por medo de que algo crítico exploda se desviarmos os olhos.</p></div>
+            <div class="kp"><div class="kpdot"></div><p class="kpt"><strong>A figura do Engenheiro:</strong> Nem o tolo que carrega na raça, nem o sábio que descarta tudo. O engenheiro calcula e <em>constrói a roldana</em>.</p></div>
+          </div>
+          <div class="qt">
+            <p class="qtt">"O problema não é que a vida seja difícil. É enfrentar uma guerra nuclear armado com um canivete suíço e uma lista de tarefas num guardanapo."</p>
+            <p class="qta">— IMPACT, Cap. 01</p>
+          </div>
+        </div>
+
+        <!-- As 3 Eras -->
+        <div class="ccard fi" style="transition-delay:.1s">
+          <span class="ctag">CONTEXTO HISTÓRICO</span>
+          <h3 class="ctitle" style="font-size:clamp(1.2rem,4.5vw,1.5rem);">As 3 Eras do Trabalho</h3>
+          <div style="margin-top:.85rem;">
+            <div class="erow"><div class="eb off">ERA 1</div><div><p style="font-size:.8rem;color:#E8E8E8;font-weight:500;">Trabalho Físico e Serial</p><p style="font-size:.72rem;color:var(--dim);margin-top:1px;">Linear · inimigo: cansaço físico</p></div></div>
+            <div class="erow"><div class="eb off">ERA 2</div><div><p style="font-size:.8rem;color:#E8E8E8;font-weight:500;">Trabalho do Conhecimento</p><p style="font-size:.72rem;color:var(--dim);margin-top:1px;">Analítico · inimigo: falta de informação</p></div></div>
+            <div class="erow"><div class="eb on">ERA 3</div><div><p style="font-size:.8rem;color:#E8E8E8;font-weight:500;">Era da Sobrecarga <span style="color:var(--gold-bright);">← você aqui</span></p><p style="font-size:.72rem;color:var(--dim);margin-top:1px;">Fragmentado · inimigo: excesso de ruído</p></div></div>
+          </div>
+        </div>
+
+        <!-- Fórmula -->
+        <div class="ccard fi" style="transition-delay:.18s">
+          <span class="ctag">REDEFINIÇÃO</span>
+          <h3 class="ctitle" style="font-size:clamp(1.2rem,4.5vw,1.5rem);">O Que é Ter Impacto?</h3>
+          <p class="cbody" style="margin-top:.55rem;">Impacto é gerar valor real sem sacrificar a sanidade — com um sistema que gerencia o caos enquanto sua mente cria, resolve e executa.</p>
+          <div class="formula">
+            <p style="font-family:'Share Tech Mono',monospace;font-size:.66rem;color:var(--gold);letter-spacing:.08em;">FÓRMULA CENTRAL</p>
+            <p style="font-size:.87rem;color:#E8E8E8;margin-top:.4rem;">Produtividade ≠ volume de execução</p>
+            <p style="font-size:.87rem;color:var(--gold-bright);margin-top:.2rem;">Produtividade = fidelidade estratégica</p>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <hr class="div">
+
+  <!-- CHAPTER 2 -->
+  <section id="cap2">
+    <div class="wrap">
+      <div class="slabel fi">Capítulo 02</div>
+      <h2 class="stitle fi">A MENTE <span>ESTENDIDA</span></h2>
+      <p class="sdesc fi">Como transformar ferramentas externas em extensões reais do sistema cognitivo — e liberar o cérebro para pensar, criar e executar.</p>
+
+      <div class="cgrid cgrid-2">
+
+        <!-- Gargalo -->
+        <div class="ccard fi">
+          <span class="cnum">02</span>
+          <span class="ctag">NEUROCIÊNCIA APLICADA</span>
+          <h3 class="ctitle">O Gargalo Biológico</h3>
+          <p class="cbody">Esqueça o mito dos 7 itens de Miller. Nelson Cowan é mais preciso: sua memória de trabalho suporta apenas <strong style="color:var(--gold-bright);">4 unidades</strong> em condições ideais.</p>
+          <div class="mstg">
+            <div class="mst"><div class="mstn" style="color:var(--gold-bright);">3</div><div class="mstl">bolas = controle</div></div>
+            <div class="mst"><div class="mstn" style="color:#E8E8E8;">4</div><div class="mstl">bolas = foco máximo</div></div>
+            <div class="mst danger"><div class="mstn" style="color:#FF6B6B;">5+</div><div class="mstl" style="color:rgba(255,107,107,.7);">colapso do sistema</div></div>
+          </div>
+        </div>
+
+        <!-- Hardware vs Software -->
+        <div class="ccard fi" style="transition-delay:.1s">
+          <span class="ctag">CONCEITO-CHAVE</span>
+          <h3 class="ctitle">Hardware vs. Software</h3>
+          <p class="cbody" style="margin-bottom:1rem;">O cérebro é hardware: fixo, limitado, moldado há 50 mil anos. A mente é software: pode ser <em style="color:var(--gold-bright);">estendida</em>.</p>
+          <div class="kp"><div class="kpdot"></div><p class="kpt"><strong>Mente Estendida</strong> (Clark & Chalmers, 1998): ferramentas externas consistentes integram o próprio sistema cognitivo.</p></div>
+          <div class="kp"><div class="kpdot"></div><p class="kpt"><strong>Loops abertos</strong> são ameaças ativas: o cérebro não distingue tarefa esquecida de risco real.</p></div>
+          <div class="kp"><div class="kpdot"></div><p class="kpt"><strong>Efeito paradoxal:</strong> ao externalizar pendências você lembra de menos — e decide melhor.</p></div>
+          <div class="qt"><p class="qtt">"Sua mente é para ter ideias, não para armazená-las."</p><p class="qta">— David Allen</p></div>
+        </div>
+
+        <!-- Custo do Overflow -->
+        <div class="ccard fi" style="transition-delay:.2s">
+          <span class="ctag">CUSTO MENSURÁVEL</span>
+          <h3 class="ctitle" style="font-size:clamp(1.2rem,4.5vw,1.5rem);">O Custo do Overflow</h3>
+          <p class="cbody" style="margin-top:.55rem;">Ultrapassar o limite repetidamente gera alerta fisiológico prolongado: cortisol elevado, córtex pré-frontal degradado, decisões reativas.</p>
+          <div style="margin-top:.9rem;padding:.9rem;background:rgba(255,50,50,.04);border:1px solid rgba(255,50,50,.15);">
+            <p style="font-family:'Share Tech Mono',monospace;font-size:.63rem;color:rgba(255,107,107,.8);letter-spacing:.09em;">PARADOXO DE SIMON</p>
+            <p style="font-size:.85rem;color:#C0C0C0;margin-top:.35rem;line-height:1.65;">"A riqueza de informações gera pobreza de atenção."</p>
+          </div>
+          <p class="cbody" style="margin-top:.8rem;font-size:.82rem;">Não existe treino ou motivação que altere esse limite. A solução é <strong style="color:#E8E8E8;">arquitetural</strong> — não pessoal.</p>
+        </div>
+
+        <!-- Pré-requisito -->
+        <div class="ccard fi" style="transition-delay:.28s">
+          <span class="ctag">PRÉ-REQUISITO DO SISTEMA</span>
+          <h3 class="ctitle" style="font-size:clamp(1.2rem,4.5vw,1.5rem);">Antes do Método</h3>
+          <p class="cbody" style="margin-top:.55rem;margin-bottom:.9rem;">Nenhum método funciona enquanto o cérebro for o repositório principal de pendências.</p>
+          <div class="step"><div class="stepn">01</div><p style="font-size:.83rem;color:#C0C0C0;line-height:1.6;">Reconhecer a finitude da mente</p></div>
+          <div class="step"><div class="stepn">02</div><p style="font-size:.83rem;color:#C0C0C0;line-height:1.6;">Externalizar memória não é luxo — é sobrevivência cognitiva</p></div>
+          <div class="step"><div class="stepn">03</div><p style="font-size:.83rem;color:#C0C0C0;line-height:1.6;">Mapear o pedágio invisível da fragmentação</p></div>
+          <div class="step"><div class="stepn">04</div><p style="font-size:.83rem;color:#C0C0C0;line-height:1.6;">Separar o ato de organizar do ato de decidir</p></div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <hr class="div">
+
+  <!-- CTA -->
+  <section class="cta" id="adquira">
+    <div class="slabel" style="justify-content:center;position:relative;z-index:1;">
+      <span style="width:18px;height:1px;background:var(--gold);display:inline-block;margin-right:4px;"></span>
+      Adquira o Livro
+      <span style="width:18px;height:1px;background:var(--gold);display:inline-block;margin-left:4px;"></span>
+    </div>
+    <h2 class="ctatitle">
+      PARE DE TENTAR SE <span style="color:var(--gold-bright);">MOTIVAR.</span><br>
+      COMECE A <span style="color:var(--gold-bright);">CALCULAR.</span>
+    </h2>
+    <p style="color:var(--dim);max-width:420px;margin:1.1rem auto 0;line-height:1.8;font-size:.91rem;position:relative;z-index:1;">
+      Um manual tático para quem precisa entregar resultados impossíveis sem perder a sanidade.
+    </p>
+    <div class="ctabtns">
+      <a href="#" class="btn-p">Comprar agora →</a>
+      <a href="#cap1" class="btn-o">Ler prévia</a>
+    </div>
+    <div style="display:flex;justify-content:center;">
+      <div class="author-badge">
+        <div class="av">R</div>
+        <div>
+          <p class="aname">Rodrigo Alex Teodoro</p>
+          <p class="arole">Orçamentista Especializado<br>Criador do Framework IMPACT</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer>
+    <div class="flogo">IMPACT</div>
+    <div class="ft">© 2026 Rodrigo Alex Teodoro · Edição do Autor</div>
+    <div class="ft">DOC. NO. 204-5B // V.1.0 // CLASSIFIED</div>
+  </footer>
+
+  <script>
+    // Hamburger
+    const hbtn  = document.getElementById('hbtn');
+    const mmenu = document.getElementById('mmenu');
+    hbtn.addEventListener('click', () => mmenu.classList.toggle('open'));
+    function closeMenu() { mmenu.classList.remove('open'); }
+
+    // Fade in on scroll
+    const io = new IntersectionObserver(entries => {
+      entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('on'); });
+    }, { threshold: 0.08 });
+    document.querySelectorAll('.fi').forEach(el => io.observe(el));
+  </script>
+
+</body>
+</html>
