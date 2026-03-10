@@ -1,0 +1,790 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>IMPACT — O Algoritmo da Execução</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Share+Tech+Mono&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root {
+      --gold: #D4A017;
+      --gold-bright: #F5C518;
+      --dark: #0A0A0A;
+      --dark-card: #111111;
+      --grid-color: rgba(212, 160, 23, 0.08);
+      --text-dim: #888888;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background-color: var(--dark);
+      color: #E8E8E8;
+      font-family: 'DM Sans', sans-serif;
+      overflow-x: hidden;
+    }
+
+    /* GRID BACKGROUND */
+    .grid-bg {
+      background-image:
+        linear-gradient(var(--grid-color) 1px, transparent 1px),
+        linear-gradient(90deg, var(--grid-color) 1px, transparent 1px);
+      background-size: 40px 40px;
+    }
+
+    /* NAV */
+    nav {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 100;
+      background: rgba(10,10,10,0.92);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid rgba(212,160,23,0.2);
+      padding: 0 2rem;
+      height: 60px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .nav-logo {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 1.6rem;
+      letter-spacing: 0.15em;
+      color: var(--gold-bright);
+    }
+
+    .nav-links { display: flex; gap: 2rem; }
+    .nav-links a {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.75rem;
+      color: var(--text-dim);
+      text-decoration: none;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      transition: color 0.2s;
+    }
+    .nav-links a:hover { color: var(--gold-bright); }
+
+    /* HERO */
+    .hero {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      padding: 80px 2rem 4rem;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero-glow {
+      position: absolute;
+      width: 600px; height: 600px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(212,160,23,0.12) 0%, transparent 70%);
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+    }
+
+    .hero-doc-tag {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.7rem;
+      letter-spacing: 0.2em;
+      color: var(--gold);
+      border: 1px solid rgba(212,160,23,0.4);
+      padding: 4px 12px;
+      display: inline-block;
+      margin-bottom: 1.5rem;
+      animation: fadeUp 0.6s ease both;
+    }
+
+    .hero-title {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: clamp(5rem, 14vw, 12rem);
+      line-height: 0.9;
+      color: var(--gold-bright);
+      letter-spacing: 0.05em;
+      text-shadow: 0 0 80px rgba(212,160,23,0.3);
+      animation: fadeUp 0.6s 0.1s ease both;
+    }
+
+    .hero-subtitle {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: clamp(1.2rem, 3vw, 2rem);
+      letter-spacing: 0.08em;
+      color: #E8E8E8;
+      margin-top: 0.5rem;
+      animation: fadeUp 0.6s 0.2s ease both;
+    }
+
+    .hero-tagline {
+      font-size: 1rem;
+      color: var(--text-dim);
+      max-width: 480px;
+      line-height: 1.7;
+      margin-top: 1.5rem;
+      animation: fadeUp 0.6s 0.3s ease both;
+    }
+
+    .hero-cta {
+      display: inline-block;
+      margin-top: 2.5rem;
+      padding: 14px 36px;
+      background: var(--gold-bright);
+      color: #0A0A0A;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.85rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      text-decoration: none;
+      font-weight: 700;
+      transition: all 0.2s;
+      animation: fadeUp 0.6s 0.4s ease both;
+    }
+    .hero-cta:hover {
+      background: #fff;
+      box-shadow: 0 0 30px rgba(245,197,24,0.4);
+      transform: translateY(-2px);
+    }
+
+    .hero-meta {
+      position: absolute;
+      right: 2rem; top: 50%;
+      transform: translateY(-50%);
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      animation: fadeUp 0.6s 0.5s ease both;
+    }
+
+    .meta-tag {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.65rem;
+      letter-spacing: 0.15em;
+      color: rgba(212,160,23,0.5);
+      writing-mode: vertical-rl;
+    }
+
+    /* SECTION STYLES */
+    section { padding: 6rem 2rem; }
+    .section-label {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.7rem;
+      letter-spacing: 0.25em;
+      color: var(--gold);
+      text-transform: uppercase;
+      margin-bottom: 0.75rem;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    .section-label::before {
+      content: '';
+      display: block;
+      width: 24px; height: 1px;
+      background: var(--gold);
+    }
+
+    .section-title {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: clamp(2.5rem, 6vw, 5rem);
+      letter-spacing: 0.05em;
+      line-height: 1;
+      color: #E8E8E8;
+    }
+    .section-title span { color: var(--gold-bright); }
+
+    .section-desc {
+      color: var(--text-dim);
+      max-width: 560px;
+      line-height: 1.8;
+      margin-top: 1rem;
+      font-size: 0.95rem;
+    }
+
+    /* CHAPTER CARDS */
+    .chapter-card {
+      background: var(--dark-card);
+      border: 1px solid rgba(212,160,23,0.15);
+      position: relative;
+      overflow: hidden;
+      transition: border-color 0.3s, transform 0.3s;
+    }
+    .chapter-card:hover {
+      border-color: rgba(212,160,23,0.5);
+      transform: translateY(-4px);
+    }
+    .chapter-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, var(--gold-bright), transparent);
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+    .chapter-card:hover::before { opacity: 1; }
+
+    .chapter-num {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 5rem;
+      line-height: 1;
+      color: rgba(212,160,23,0.08);
+      position: absolute;
+      top: 1rem; right: 1.5rem;
+      letter-spacing: 0.05em;
+    }
+
+    .chapter-tag {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.65rem;
+      letter-spacing: 0.2em;
+      color: var(--gold);
+      border: 1px solid rgba(212,160,23,0.3);
+      padding: 3px 10px;
+      display: inline-block;
+      margin-bottom: 1rem;
+    }
+
+    .chapter-title {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 1.8rem;
+      letter-spacing: 0.06em;
+      color: #E8E8E8;
+      line-height: 1.1;
+      margin-bottom: 1rem;
+    }
+
+    .chapter-body {
+      color: var(--text-dim);
+      font-size: 0.9rem;
+      line-height: 1.75;
+    }
+
+    /* KEY POINTS */
+    .key-point {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.75rem;
+      padding: 0.75rem 0;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+    .key-point:last-child { border-bottom: none; }
+
+    .kp-bullet {
+      width: 6px; height: 6px;
+      background: var(--gold-bright);
+      border-radius: 50%;
+      flex-shrink: 0;
+      margin-top: 7px;
+    }
+
+    .kp-text { font-size: 0.88rem; color: #C0C0C0; line-height: 1.6; }
+    .kp-text strong { color: #E8E8E8; font-weight: 500; }
+
+    /* QUOTE BLOCK */
+    .quote-block {
+      border-left: 3px solid var(--gold);
+      padding: 1rem 1.5rem;
+      background: rgba(212,160,23,0.04);
+      margin: 1.5rem 0;
+    }
+    .quote-text {
+      font-style: italic;
+      color: #C0C0C0;
+      font-size: 0.9rem;
+      line-height: 1.7;
+    }
+    .quote-author {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.7rem;
+      color: var(--gold);
+      margin-top: 0.5rem;
+      letter-spacing: 0.1em;
+    }
+
+    /* STAT CARDS */
+    .stat-card {
+      background: rgba(212,160,23,0.05);
+      border: 1px solid rgba(212,160,23,0.2);
+      padding: 1.5rem;
+      text-align: center;
+      transition: all 0.3s;
+    }
+    .stat-card:hover {
+      background: rgba(212,160,23,0.1);
+      border-color: var(--gold);
+    }
+    .stat-num {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 3rem;
+      color: var(--gold-bright);
+      line-height: 1;
+      display: block;
+    }
+    .stat-label {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.7rem;
+      letter-spacing: 0.12em;
+      color: var(--text-dim);
+      margin-top: 0.4rem;
+      text-transform: uppercase;
+    }
+
+    /* DIVIDER */
+    .divider {
+      border: none;
+      border-top: 1px solid rgba(212,160,23,0.15);
+      margin: 0;
+    }
+
+    /* CTA SECTION */
+    .cta-section {
+      text-align: center;
+      padding: 6rem 2rem;
+      position: relative;
+    }
+    .cta-section::before {
+      content: 'IMPACT';
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 20rem;
+      color: rgba(212,160,23,0.03);
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      letter-spacing: 0.1em;
+      pointer-events: none;
+      white-space: nowrap;
+    }
+
+    /* AUTHOR */
+    .author-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 1rem;
+      background: var(--dark-card);
+      border: 1px solid rgba(212,160,23,0.2);
+      padding: 1rem 1.5rem;
+      margin-top: 1.5rem;
+    }
+    .author-avatar {
+      width: 48px; height: 48px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--gold), #8B6914);
+      display: flex; align-items: center; justify-content: center;
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 1.3rem;
+      color: #0A0A0A;
+      flex-shrink: 0;
+    }
+    .author-name {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 1.1rem;
+      letter-spacing: 0.08em;
+      color: #E8E8E8;
+    }
+    .author-title {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.65rem;
+      letter-spacing: 0.1em;
+      color: var(--text-dim);
+    }
+
+    /* FOOTER */
+    footer {
+      border-top: 1px solid rgba(212,160,23,0.15);
+      padding: 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+    .footer-logo {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 1.3rem;
+      color: var(--gold);
+      letter-spacing: 0.15em;
+    }
+    .footer-text {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.65rem;
+      color: var(--text-dim);
+      letter-spacing: 0.1em;
+    }
+
+    /* ANIMATIONS */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(24px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .fade-in {
+      opacity: 0;
+      transform: translateY(20px);
+      transition: opacity 0.6s ease, transform 0.6s ease;
+    }
+    .fade-in.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    /* RESPONSIVE */
+    @media (max-width: 768px) {
+      .hero-meta { display: none; }
+      .nav-links { display: none; }
+    }
+  </style>
+</head>
+<body class="grid-bg">
+
+  <!-- NAV -->
+  <nav>
+    <div class="nav-logo">IMPACT</div>
+    <div class="nav-links">
+      <a href="#about">Sobre</a>
+      <a href="#cap1">Cap. 01</a>
+      <a href="#cap2">Cap. 02</a>
+      <a href="#adquira">Adquirir</a>
+    </div>
+  </nav>
+
+  <!-- HERO -->
+  <section class="hero" id="about">
+    <div class="hero-glow"></div>
+    <div style="max-width:1200px; margin: 0 auto; width: 100%; position: relative; z-index: 1;">
+      <div class="hero-doc-tag">DOC. NO. 204-5B // V.1.0 // CLASSIFIED</div>
+      <h1 class="hero-title">IMPACT</h1>
+      <p class="hero-subtitle">O Algoritmo da Execução</p>
+      <p style="font-family:'Bebas Neue',sans-serif; font-size:1rem; letter-spacing:0.15em; color:rgba(212,160,23,0.7); margin-top:0.4rem; animation: fadeUp 0.6s 0.2s ease both;">
+        Sistema à prova de falhas para quem lida com o Caos Real
+      </p>
+      <p class="hero-tagline">
+        Não é um guia de arrumação. É um manifesto sobre a decisão.
+        Um algoritmo cru e funcional, desenhado para o combate diário —
+        operando à margem do seu humor ou de picos de motivação.
+      </p>
+      <a href="#adquira" class="hero-cta">Adquirir o livro →</a>
+
+      <!-- Stats row -->
+      <div style="display:flex; gap:2rem; margin-top:4rem; flex-wrap:wrap; animation: fadeUp 0.6s 0.5s ease both;">
+        <div>
+          <span style="font-family:'Bebas Neue',sans-serif; font-size:2.5rem; color:var(--gold-bright);">13</span>
+          <p style="font-family:'Share Tech Mono',monospace; font-size:0.65rem; color:var(--text-dim); letter-spacing:0.12em;">CAPÍTULOS</p>
+        </div>
+        <div style="width:1px; background:rgba(212,160,23,0.2);"></div>
+        <div>
+          <span style="font-family:'Bebas Neue',sans-serif; font-size:2.5rem; color:var(--gold-bright);">120</span>
+          <p style="font-family:'Share Tech Mono',monospace; font-size:0.65rem; color:var(--text-dim); letter-spacing:0.12em;">PÁGINAS</p>
+        </div>
+        <div style="width:1px; background:rgba(212,160,23,0.2);"></div>
+        <div>
+          <span style="font-family:'Bebas Neue',sans-serif; font-size:2.5rem; color:var(--gold-bright);">1</span>
+          <p style="font-family:'Share Tech Mono',monospace; font-size:0.65rem; color:var(--text-dim); letter-spacing:0.12em;">SISTEMA COMPLETO</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="hero-meta">
+      <span class="meta-tag">RODRIGO ALEX TEODORO</span>
+      <span class="meta-tag">EDIÇÃO 2026</span>
+      <span class="meta-tag">TECHNICAL MANUAL FOR RAPID IMPLEMENTATION</span>
+    </div>
+  </section>
+
+  <hr class="divider">
+
+  <!-- STATS ROW -->
+  <div style="padding: 3rem 2rem; max-width:1200px; margin: 0 auto;">
+    <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(180px,1fr)); gap: 1px; background: rgba(212,160,23,0.1);">
+      <div class="stat-card fade-in">
+        <span class="stat-num">34<span style="font-size:1.5rem;">GB</span></span>
+        <p class="stat-label">informação processada por dia</p>
+      </div>
+      <div class="stat-card fade-in" style="transition-delay:0.1s">
+        <span class="stat-num">4</span>
+        <p class="stat-label">limite real da memória de trabalho</p>
+      </div>
+      <div class="stat-card fade-in" style="transition-delay:0.2s">
+        <span class="stat-num">174</span>
+        <p class="stat-label">jornais diários a processar</p>
+      </div>
+      <div class="stat-card fade-in" style="transition-delay:0.3s">
+        <span class="stat-num">0</span>
+        <p class="stat-label">força de vontade necessária no sistema</p>
+      </div>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <!-- CHAPTER 1 -->
+  <section id="cap1" style="padding: 6rem 2rem; max-width:1200px; margin: 0 auto;">
+    <div class="section-label fade-in">Capítulo 01</div>
+    <h2 class="section-title fade-in">O ATAQUE DE <span>NEGAÇÃO</span><br>DE SERVIÇO (DDoS)</h2>
+    <p class="section-desc fade-in">
+      Como o bombardeio constante de estímulos paralisa o seu sistema cognitivo —
+      e por que isso não é uma falha de caráter, mas um problema de arquitetura.
+    </p>
+
+    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:1.5rem; margin-top:3rem;" class="fade-in">
+
+      <!-- Card principal -->
+      <div class="chapter-card" style="padding: 2rem; grid-row: span 2;">
+        <span class="chapter-num">01</span>
+        <span class="chapter-tag">DIAGNÓSTICO DO SISTEMA</span>
+        <h3 class="chapter-title">A Matemática do Colapso</h3>
+        <p class="chapter-body">
+          O problema não é falta de disciplina. É um clássico problema de dimensionamento de carga:
+          um hardware biológico que não recebe atualização há 50 mil anos tentando processar
+          o fluxo informacional do século XXI.
+        </p>
+
+        <div style="margin-top:1.5rem;">
+          <div class="key-point">
+            <div class="kp-bullet"></div>
+            <p class="kp-text"><strong>O efeito DDoS mental:</strong> Milhares de requisições simultâneas fazem o cérebro perder a capacidade de distinguir incêndio real de ruído irrelevante — tudo vira urgência.</p>
+          </div>
+          <div class="key-point">
+            <div class="kp-bullet"></div>
+            <p class="kp-text"><strong>Latência cognitiva:</strong> A lentidão mental da tarde, o esquecimento repentino, o dia exausto sem projetos relevantes entregues — são sintomas do overflow, não de preguiça.</p>
+          </div>
+          <div class="key-point">
+            <div class="kp-bullet"></div>
+            <p class="kp-text"><strong>O Paradoxo da Conexão:</strong> Não checamos o e-mail no sábado por vício — mas por medo de que algo crítico exploda se desviarmos os olhos por um minuto.</p>
+          </div>
+          <div class="key-point">
+            <div class="kp-bullet"></div>
+            <p class="kp-text"><strong>A figura do Engenheiro:</strong> Nem o tolo que carrega o peso na raça, nem o sábio que descarta tudo. O engenheiro analisa, calcula e <em>constrói a roldana</em>.</p>
+          </div>
+        </div>
+
+        <div class="quote-block" style="margin-top:1.5rem;">
+          <p class="quote-text">"O problema não é que a vida seja difícil. É enfrentar uma guerra nuclear armado com um canivete suíço e uma lista de tarefas num guardanapo."</p>
+          <p class="quote-author">— IMPACT, Cap. 01</p>
+        </div>
+      </div>
+
+      <!-- Card: As 3 Eras -->
+      <div class="chapter-card" style="padding:2rem;">
+        <span class="chapter-tag">CONTEXTO HISTÓRICO</span>
+        <h3 class="chapter-title" style="font-size:1.3rem;">As 3 Eras do Trabalho</h3>
+        <div style="margin-top:1rem; display:flex; flex-direction:column; gap:0.75rem;">
+          <div style="display:flex; gap:1rem; align-items:flex-start;">
+            <div style="background:rgba(212,160,23,0.15); border:1px solid rgba(212,160,23,0.3); padding:4px 10px; font-family:'Bebas Neue',sans-serif; font-size:1rem; letter-spacing:0.1em; color:var(--gold-bright); flex-shrink:0;">ERA 1</div>
+            <div>
+              <p style="font-size:0.8rem; color:#E8E8E8; font-weight:500;">Trabalho Físico e Serial</p>
+              <p style="font-size:0.75rem; color:var(--text-dim); margin-top:2px;">Tarefas lineares, ritmo previsível, inimigo: cansaço físico.</p>
+            </div>
+          </div>
+          <div style="display:flex; gap:1rem; align-items:flex-start;">
+            <div style="background:rgba(212,160,23,0.15); border:1px solid rgba(212,160,23,0.3); padding:4px 10px; font-family:'Bebas Neue',sans-serif; font-size:1rem; letter-spacing:0.1em; color:var(--gold-bright); flex-shrink:0;">ERA 2</div>
+            <div>
+              <p style="font-size:0.8rem; color:#E8E8E8; font-weight:500;">Trabalho do Conhecimento</p>
+              <p style="font-size:0.75rem; color:var(--text-dim); margin-top:2px;">Analítico, foco exigido, inimigo: falta de informação.</p>
+            </div>
+          </div>
+          <div style="display:flex; gap:1rem; align-items:flex-start;">
+            <div style="background:rgba(212,160,23,0.5); border:1px solid var(--gold); padding:4px 10px; font-family:'Bebas Neue',sans-serif; font-size:1rem; letter-spacing:0.1em; color:#0A0A0A; flex-shrink:0;">ERA 3</div>
+            <div>
+              <p style="font-size:0.8rem; color:#E8E8E8; font-weight:500;">Era da Sobrecarga ← Você está aqui</p>
+              <p style="font-size:0.75rem; color:var(--text-dim); margin-top:2px;">Fragmentado, ininterrupto, inimigo: excesso de ruído e atenção.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card: Definição de Impacto -->
+      <div class="chapter-card" style="padding:2rem;">
+        <span class="chapter-tag">REDEFINIÇÃO</span>
+        <h3 class="chapter-title" style="font-size:1.3rem;">O Que é Ter Impacto?</h3>
+        <p class="chapter-body" style="margin-top:0.75rem;">
+          Impacto não é responder 50 e-mails. É a capacidade de gerar valor real sem sacrificar a sanidade —
+          com um sistema confiável que gerencia o caos enquanto sua mente cria, resolve e executa.
+        </p>
+        <div style="margin-top:1rem; padding:1rem; background:rgba(212,160,23,0.06); border-left:2px solid var(--gold);">
+          <p style="font-family:'Share Tech Mono',monospace; font-size:0.75rem; color:var(--gold); letter-spacing:0.08em;">FÓRMULA CENTRAL</p>
+          <p style="font-size:0.9rem; color:#E8E8E8; margin-top:0.5rem;">Produtividade ≠ volume de execução</p>
+          <p style="font-size:0.9rem; color:var(--gold-bright); margin-top:0.25rem;">Produtividade = fidelidade estratégica</p>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <hr class="divider">
+
+  <!-- CHAPTER 2 -->
+  <section id="cap2" style="padding: 6rem 2rem; max-width:1200px; margin: 0 auto;">
+    <div class="section-label fade-in">Capítulo 02</div>
+    <h2 class="section-title fade-in">A MENTE <span>ESTENDIDA</span></h2>
+    <p class="section-desc fade-in">
+      Como transformar ferramentas externas em extensões reais do seu sistema cognitivo —
+      e liberar o cérebro para fazer o que ele faz de melhor: pensar.
+    </p>
+
+    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:1.5rem; margin-top:3rem;">
+
+      <!-- Card: O Gargalo -->
+      <div class="chapter-card fade-in" style="padding:2rem;">
+        <span class="chapter-num">02</span>
+        <span class="chapter-tag">NEUROCIÊNCIA APLICADA</span>
+        <h3 class="chapter-title">O Gargalo Biológico</h3>
+        <p class="chapter-body">
+          Esqueça o mito dos 7 itens de Miller. A ciência de Nelson Cowan é mais cruel:
+          sua memória de trabalho comporta apenas <strong style="color:var(--gold-bright);">4 unidades</strong> de informação complexa —
+          em condições ideais.
+        </p>
+        <div style="margin-top:1.5rem; display:grid; grid-template-columns:1fr 1fr; gap:0.75rem;">
+          <div style="background:rgba(212,160,23,0.06); border:1px solid rgba(212,160,23,0.2); padding:1rem; text-align:center;">
+            <p style="font-family:'Bebas Neue',sans-serif; font-size:2.5rem; color:var(--gold-bright);">3</p>
+            <p style="font-family:'Share Tech Mono',monospace; font-size:0.6rem; color:var(--text-dim); letter-spacing:0.1em;">bolas = controle</p>
+          </div>
+          <div style="background:rgba(212,160,23,0.06); border:1px solid rgba(212,160,23,0.2); padding:1rem; text-align:center;">
+            <p style="font-family:'Bebas Neue',sans-serif; font-size:2.5rem; color:#E8E8E8;">4</p>
+            <p style="font-family:'Share Tech Mono',monospace; font-size:0.6rem; color:var(--text-dim); letter-spacing:0.1em;">bolas = foco máximo</p>
+          </div>
+          <div style="background:rgba(255,50,50,0.06); border:1px solid rgba(255,50,50,0.2); padding:1rem; text-align:center; grid-column:span 2;">
+            <p style="font-family:'Bebas Neue',sans-serif; font-size:2.5rem; color:#FF6B6B;">5+</p>
+            <p style="font-family:'Share Tech Mono',monospace; font-size:0.6rem; color:rgba(255,107,107,0.7); letter-spacing:0.1em;">colapso do sistema</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card: Hardware vs Software -->
+      <div class="chapter-card fade-in" style="padding:2rem; transition-delay:0.1s;">
+        <span class="chapter-tag">CONCEITO-CHAVE</span>
+        <h3 class="chapter-title">Hardware vs. Software</h3>
+        <p class="chapter-body" style="margin-bottom:1.5rem;">
+          O cérebro é hardware: fixo, limitado, moldado há 50 mil anos.
+          A mente é software: pode ser <em style="color:var(--gold-bright);">estendida</em>.
+        </p>
+        <div class="key-point">
+          <div class="kp-bullet"></div>
+          <p class="kp-text"><strong>Teoria da Mente Estendida</strong> (Clark & Chalmers, 1998): ferramentas externas usadas de forma consistente passam a integrar o próprio sistema cognitivo.</p>
+        </div>
+        <div class="key-point">
+          <div class="kp-bullet"></div>
+          <p class="kp-text"><strong>Loops abertos</strong> são ameaças ativas: o cérebro não distingue uma tarefa esquecida de um risco real — ambos consomem recursos atencionais.</p>
+        </div>
+        <div class="key-point">
+          <div class="kp-bullet"></div>
+          <p class="kp-text"><strong>O efeito paradoxal:</strong> ao transferir pendências para um sistema externo, você "lembra" de menos — e decide melhor.</p>
+        </div>
+        <div class="quote-block" style="margin-top:1rem;">
+          <p class="quote-text">"Sua mente é para ter ideias, não para armazená-las."</p>
+          <p class="quote-author">— David Allen</p>
+        </div>
+      </div>
+
+      <!-- Card: O custo do overflow -->
+      <div class="chapter-card fade-in" style="padding:2rem; transition-delay:0.2s;">
+        <span class="chapter-tag">CUSTO MENSURÁVEL</span>
+        <h3 class="chapter-title" style="font-size:1.3rem;">O Custo do Overflow</h3>
+        <p class="chapter-body" style="margin-top:0.75rem;">
+          Ultrapassar repetidamente o limite operacional gera um estado de alerta fisiológico prolongado:
+          cortisol elevado, córtex pré-frontal degradado, decisões reativas.
+        </p>
+        <div style="margin-top:1rem; padding:1rem; background:rgba(255,50,50,0.04); border:1px solid rgba(255,50,50,0.15);">
+          <p style="font-family:'Share Tech Mono',monospace; font-size:0.7rem; color:rgba(255,107,107,0.8); letter-spacing:0.1em;">PARADOXO DE SIMON</p>
+          <p style="font-size:0.88rem; color:#C0C0C0; margin-top:0.5rem; line-height:1.6;">"A riqueza de informações gera pobreza de atenção."</p>
+        </div>
+        <p class="chapter-body" style="margin-top:1rem; font-size:0.82rem;">
+          Não existe treino, força de vontade ou motivação que altere esse limite biológico.
+          A solução é arquitetural — não pessoal.
+        </p>
+      </div>
+
+      <!-- Card: O pré-requisito -->
+      <div class="chapter-card fade-in" style="padding:2rem; transition-delay:0.3s;">
+        <span class="chapter-tag">PRÉ-REQUISITO DO SISTEMA</span>
+        <h3 class="chapter-title" style="font-size:1.3rem;">Antes do Método</h3>
+        <p class="chapter-body" style="margin-top:0.75rem; margin-bottom:1rem;">
+          Nenhum método de produtividade funciona enquanto o cérebro for o repositório principal de pendências.
+        </p>
+        <div style="display:flex; flex-direction:column; gap:0.5rem;">
+          <div style="display:flex; align-items:center; gap:0.75rem;">
+            <div style="width:20px; height:20px; background:rgba(212,160,23,0.2); border:1px solid var(--gold); display:flex; align-items:center; justify-content:center; font-family:'Share Tech Mono',monospace; font-size:0.6rem; color:var(--gold); flex-shrink:0;">01</div>
+            <p style="font-size:0.82rem; color:#C0C0C0;">Reconhecer a finitude da mente</p>
+          </div>
+          <div style="display:flex; align-items:center; gap:0.75rem;">
+            <div style="width:20px; height:20px; background:rgba(212,160,23,0.2); border:1px solid var(--gold); display:flex; align-items:center; justify-content:center; font-family:'Share Tech Mono',monospace; font-size:0.6rem; color:var(--gold); flex-shrink:0;">02</div>
+            <p style="font-size:0.82rem; color:#C0C0C0;">Externalizar memória não é luxo — é sobrevivência cognitiva</p>
+          </div>
+          <div style="display:flex; align-items:center; gap:0.75rem;">
+            <div style="width:20px; height:20px; background:rgba(212,160,23,0.2); border:1px solid var(--gold); display:flex; align-items:center; justify-content:center; font-family:'Share Tech Mono',monospace; font-size:0.6rem; color:var(--gold); flex-shrink:0;">03</div>
+            <p style="font-size:0.82rem; color:#C0C0C0;">Mapear o pedágio invisível da fragmentação</p>
+          </div>
+          <div style="display:flex; align-items:center; gap:0.75rem;">
+            <div style="width:20px; height:20px; background:rgba(212,160,23,0.2); border:1px solid var(--gold); display:flex; align-items:center; justify-content:center; font-family:'Share Tech Mono',monospace; font-size:0.6rem; color:var(--gold); flex-shrink:0;">04</div>
+            <p style="font-size:0.82rem; color:#C0C0C0;">Separar o ato de organizar do ato de decidir</p>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <hr class="divider">
+
+  <!-- CTA -->
+  <section id="adquira" class="cta-section">
+    <div style="position:relative; z-index:1;">
+      <div class="section-label" style="justify-content:center;">
+        <span style="width:24px; height:1px; background:var(--gold); display:inline-block;"></span>
+        Adquira o Livro
+        <span style="width:24px; height:1px; background:var(--gold); display:inline-block;"></span>
+      </div>
+      <h2 style="font-family:'Bebas Neue',sans-serif; font-size:clamp(2.5rem,6vw,5rem); letter-spacing:0.05em; color:#E8E8E8; line-height:1.1;">
+        PARE DE TENTAR SE <span style="color:var(--gold-bright);">MOTIVAR.</span><br>
+        COMECE A <span style="color:var(--gold-bright);">CALCULAR.</span>
+      </h2>
+      <p style="color:var(--text-dim); max-width:480px; margin: 1.5rem auto; line-height:1.8; font-size:0.95rem;">
+        O sistema IMPACT está disponível agora. Um manual tático para quem precisa
+        entregar resultados impossíveis sem perder a sanidade.
+      </p>
+      <div style="display:flex; gap:1rem; justify-content:center; flex-wrap:wrap; margin-top:2rem;">
+        <a href="#" class="hero-cta" style="margin-top:0;">Comprar agora →</a>
+        <a href="#cap1" style="display:inline-block; padding:14px 36px; border:1px solid rgba(212,160,23,0.4); color:var(--gold); font-family:'Share Tech Mono',monospace; font-size:0.85rem; letter-spacing:0.15em; text-decoration:none; transition:all 0.2s;">
+          Ler prévia
+        </a>
+      </div>
+
+      <div style="display:flex; justify-content:center; margin-top:3rem;">
+        <div class="author-badge">
+          <div class="author-avatar">R</div>
+          <div>
+            <p class="author-name">Rodrigo Alex Teodoro</p>
+            <p class="author-title">Orçamentista Especializado · Criador do Framework IMPACT</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer>
+    <div class="footer-logo">IMPACT</div>
+    <div class="footer-text">© 2026 RODRIGO ALEX TEODORO · EDIÇÃO DO AUTOR · SANTA BÁRBARA D'OESTE</div>
+    <div class="footer-text">DOC. NO. 204-5B // V.1.0 // CLASSIFIED</div>
+  </footer>
+
+  <script>
+    // Scroll-triggered fade-in
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('visible');
+        }
+      });
+    }, { threshold: 0.1 });
+
+    document.querySelectorAll('.fade-in').forEach(el => observer.observe(el));
+  </script>
+
+</body>
+</html>
